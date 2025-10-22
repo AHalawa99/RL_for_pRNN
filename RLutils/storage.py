@@ -29,7 +29,7 @@ def get_model_dir(model_name):
 
 
 def get_video_dir(model_name):
-    return os.path.join(os.environ["HOME"], '/RLvideos', model_name)
+    return os.path.join(os.environ["HOME"], 'RLvideos', model_name)
 
 
 def get_tmp_dir():
