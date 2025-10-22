@@ -58,6 +58,8 @@ rl:
     cann_input_width: 100
     k_int: 1 # Coefficient for intrinsic reward. Only relevant if exp.intrinsic is True
     k_curious: 1 # Coeffecient for curious reward. Only relevant if exp.curious_agent is True
+    use_progress_curiousity: False # If true, use progress-based curiosity (Only relevant if exp.curious_agent is True)
+    progress_ema_gamma: 0.9995 # Ema coefficient for progress-based curiosity. 0.9995 is used in https://arxiv.org/pdf/2007.07853
     eval_type: rewards
     value_type: single
 

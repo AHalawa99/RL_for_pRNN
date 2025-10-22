@@ -5,6 +5,7 @@ import torch
 import math
 import numpy as np
 
+from copy import deepcopy
 from scipy.stats import entropy
 from torch_ac.format import default_preprocess_obss
 from torch_ac.utils import DictList
@@ -23,7 +24,8 @@ class PredictivePPOAlgo:
                  gae_lambda=0.95, entropy_coef=0.01, value_loss_coef=0.5, max_grad_norm=0.5, recurrence=1,
                  adam_eps=1e-8, clip_eps=0.2, epochs=4, batch_size=256, preprocess_obss=None, place_cells=None,
                  cann=None, train_pN=False, noise_mu=0, noise_std=0.03, prnn_seqdur=0, intrinsic=False, k_int=1,
-                 pastSR=False, curious_agent=False, k_curious=1):
+                 pastSR=False, curious_agent=False, k_curious=1, use_progress_curiousity=False, progress_gamma=0.9995): 
+                                                    #0.9995 is the EMA value used in https://arxiv.org/pdf/2007.07853
         """
         Initializes a `BaseAlgo` instance.
 
@@ -83,6 +85,16 @@ class PredictivePPOAlgo:
         self.pastSR = pastSR
         self.curious_agent = curious_agent
         self.k_curious = k_curious
+        self.use_progress_curiousity = use_progress_curiousity
+        if self.use_progress_curiousity:
+            assert self.curious_agent, "Progress-based curiosity requires curious_agent=True"
+            assert self.pN is not None, "Progress curiousity requires a valid predictiveNet (self.pN)."
+            self.progress_gamma = progress_gamma
+            self.pN_ema = deepcopy(self.pN)
+            self.pN_ema.pRNN.to(self.device)
+            for p in self.pN_ema.pRNN.parameters():
+                p.requires_grad = False
+
         assert pastSR ^ ('Next' in str(env.encodeAction))
 
         if hasattr(self.env, 'loc_mask'):
@@ -249,8 +261,19 @@ class PredictivePPOAlgo:
                 obs_formatted, act_formatted = obs_formatted.to(self.device), act_formatted.to(self.device)
                 obs_pred, obs_next, _ = self.pN.predict(obs_formatted, act_formatted)
                 obs_pred, obs_next = obs_pred.squeeze(0), obs_next.squeeze(0)
-                MSEs = ((obs_pred - obs_next) ** 2).mean(dim=1)  # [2048]
-                self.curious_rewards = MSEs
+                MSEs = ((obs_pred - obs_next) ** 2).mean(dim=1)  # [2048] #This is current model
+
+                if self.use_progress_curiousity:
+                    obs_pred_ema, obs_next_ema, _ = self.pN_ema.predict(obs_formatted, act_formatted)
+                    obs_pred_ema, obs_next_ema = obs_pred_ema.squeeze(0), obs_next_ema.squeeze(0)
+                    assert torch.allclose(obs_next_ema, obs_next, atol=1e-6, rtol=1e-5), "Something is wrong"
+
+                    MSEs_ema = ((obs_pred_ema - obs_next_ema) ** 2).mean(dim=1)  # [2048] #This is EMA model
+                    # γ-Progress reward: L(θ_old) − L(θ_new)
+                    self.curious_rewards = (MSEs_ema - MSEs)
+
+                else: #adversarial setting; reward is loss
+                    self.curious_rewards = MSEs
 
         # Calculate intrinsic rewards
         if self.intrinsic:
@@ -466,7 +489,9 @@ class PredictivePPOAlgo:
                 start_episode = done_indices[idx-1]
                 end_episode = done_indices[idx]
                 last_obs = last_observations[idx-1]
-                self._train_pN(exps, start_episode, end_episode, last_obs)
+                self._trainStep_pN(exps, start_episode, end_episode, last_obs)
+                if self.use_progress_curiousity:
+                    self._update_pN_ema()
 
         # Log some values
 
@@ -481,7 +506,7 @@ class PredictivePPOAlgo:
         return logs
 
 
-    def _train_pN(self, exps, startIdx, endIdx, last_obs):
+    def _trainStep_pN(self, exps, startIdx, endIdx, last_obs):
         images_tensor, hd_tensor = exps.obs.image[startIdx:endIdx], exps.obs.direction[startIdx:endIdx]
         obs_for_pN = [{'image': images_tensor[i].cpu().numpy(), 'direction': hd_tensor[i].item()} 
                     for i in range(len(images_tensor))]
@@ -493,6 +518,18 @@ class PredictivePPOAlgo:
         act = act.to(self.device)
         _,_,_ = self.pN.trainStep(obs, act)
         self.pN.numTrainingEpochs +=1
+
+
+    def _update_pN_ema(self):
+        #EMA update for world model parameters: θ_old ← γ θ_old + (1−γ) θ_new
+        assert self.use_progress_curiousity, "EMA update only relevant if using progress-based curiosity"
+        with torch.no_grad():
+            # parameters
+            for ema_p, p in zip(self.pN_ema.pRNN.parameters(), self.pN.pRNN.parameters()):
+                ema_p.data.mul_(self.progress_gamma).add_(p.data, alpha=(1.0 - self.progress_gamma))
+            # buffers (e.g., running stats i.e. batch norm running stats if that is ever done)
+            for ema_b, b in zip(self.pN_ema.pRNN.buffers(), self.pN.pRNN.buffers()):
+                ema_b.copy_(b)
 
 
     def randomAgent_collect_exp_and_update(self, agent):

@@ -231,7 +231,8 @@ class RL_Trainer(object):
                                      args.rl.max_grad_norm, args.exp.recurrence, args.rl.optim_eps, args.rl.ppo_clip_eps,
                                      args.rl.ppo_epochs, args.rl.ppo_batch_size, preprocess_obss, PC, CANN,
                                      args.predNet.train, args.predNet.noisemean, args.predNet.noisestd, args.predNet.seqdur,
-                                     args.exp.intrinsic, args.rl.k_int, pastSR, args.exp.curious_agent, args.rl.k_curious
+                                     args.exp.intrinsic, args.rl.k_int, pastSR, args.exp.curious_agent, args.rl.k_curious,
+                                     args.rl.use_progress_curiousity, args.rl.progress_ema_gamma
                                      )
 
 
