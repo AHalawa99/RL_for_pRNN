@@ -257,23 +257,30 @@ class PredictivePPOAlgo:
         if self.curious_agent:
             with torch.no_grad():
                 actions_preformatted = self.actions.cpu().numpy()
-                obs_formatted, act_formatted = self.pN.env_shell.env2pred(self.obss + [self.obs], actions_preformatted)
-                obs_formatted, act_formatted = obs_formatted.to(self.device), act_formatted.to(self.device)
-                obs_pred, obs_next, _ = self.pN.predict(obs_formatted, act_formatted)
-                obs_pred, obs_next = obs_pred.squeeze(0), obs_next.squeeze(0)
-                MSEs = ((obs_pred - obs_next) ** 2).mean(dim=1)  # [2048] #This is current model
+                MSEs = torch.zeros(self.num_frames, device=self.device)
+                MSEs_ema = torch.zeros(self.num_frames, device=self.device) if self.use_progress_curiousity else None
 
-                if self.use_progress_curiousity:
-                    obs_pred_ema, obs_next_ema, _ = self.pN_ema.predict(obs_formatted, act_formatted)
-                    obs_pred_ema, obs_next_ema = obs_pred_ema.squeeze(0), obs_next_ema.squeeze(0)
-                    assert torch.allclose(obs_next_ema, obs_next, atol=1e-6, rtol=1e-5), "Something is wrong"
+                for idx in range(1, len(self.done_indices)):
+                    start_episode, end_episode = self.done_indices[idx-1], self.done_indices[idx]
+                    last_obs = self.last_observations[idx-1]
+                    acts_now = actions_preformatted[start_episode:end_episode]
+                    obs_now = self.obss[start_episode:end_episode] + [last_obs]
+                    obs_formatted, act_formatted = self.pN.env_shell.env2pred(obs_now, acts_now)
+                    obs_pred, obs_next, _ = self.pN.predict(obs_formatted, act_formatted)
+                    obs_pred, obs_next = obs_pred.squeeze(0), obs_next.squeeze(0)
+                    MSEs[start_episode:end_episode] = ((obs_pred - obs_next) ** 2).mean(dim=1) 
 
-                    MSEs_ema = ((obs_pred_ema - obs_next_ema) ** 2).mean(dim=1)  # [2048] #This is EMA model
-                    # γ-Progress reward: L(θ_old) − L(θ_new)
-                    self.curious_rewards = (MSEs_ema - MSEs)
 
-                else: #adversarial setting; reward is loss
-                    self.curious_rewards = MSEs
+                    if self.use_progress_curiousity:
+                        obs_pred_ema, obs_next_ema, _ = self.pN_ema.predict(obs_formatted, act_formatted)
+                        obs_pred_ema, obs_next_ema = obs_pred_ema.squeeze(0), obs_next_ema.squeeze(0)
+                        assert torch.allclose(obs_next_ema, obs_next, atol=1e-6, rtol=1e-5), "Something is wrong"
+                        MSEs_ema[start_episode:end_episode] = ((obs_pred_ema - obs_next_ema) ** 2).mean(dim=1)  
+
+                
+                # γ-Progress reward: L(θ_old) − L(θ_new)
+                # adversarial reward: L(θ)
+                self.curious_rewards = (MSEs_ema - MSEs) if self.use_progress_curiousity else MSEs
 
         # Calculate intrinsic rewards
         if self.intrinsic:
