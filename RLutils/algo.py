@@ -266,6 +266,7 @@ class PredictivePPOAlgo:
                     acts_now = actions_preformatted[start_episode:end_episode]
                     obs_now = self.obss[start_episode:end_episode] + [last_obs]
                     obs_formatted, act_formatted = self.pN.env_shell.env2pred(obs_now, acts_now)
+                    obs_formatted, act_formatted = obs_formatted.to(self.device), act_formatted.to(self.device)
                     obs_pred, obs_next, _ = self.pN.predict(obs_formatted, act_formatted)
                     obs_pred, obs_next = obs_pred.squeeze(0), obs_next.squeeze(0)
                     MSEs[start_episode:end_episode] = ((obs_pred - obs_next) ** 2).mean(dim=1) 
