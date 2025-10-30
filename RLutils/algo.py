@@ -24,7 +24,8 @@ class PredictivePPOAlgo:
                  gae_lambda=0.95, entropy_coef=0.01, value_loss_coef=0.5, max_grad_norm=0.5, recurrence=1,
                  adam_eps=1e-8, clip_eps=0.2, epochs=4, batch_size=256, preprocess_obss=None, place_cells=None,
                  cann=None, train_pN=False, noise_mu=0, noise_std=0.03, prnn_seqdur=0, intrinsic=False, k_int=1,
-                 pastSR=False, curious_agent=False, k_curious=1, use_progress_curiousity=False, progress_gamma=0.9995): 
+                 pastSR=False, curious_agent=False, k_curious=1, use_progress_curiousity=False, progress_gamma=0.9995,
+                 minmax_cur_rewards=False, normalize_advantage=False, popart=False): 
                                                     #0.9995 is the EMA value used in https://arxiv.org/pdf/2007.07853
         """
         Initializes a `BaseAlgo` instance.
@@ -86,6 +87,9 @@ class PredictivePPOAlgo:
         self.curious_agent = curious_agent
         self.k_curious = k_curious
         self.use_progress_curiousity = use_progress_curiousity
+        self.normalize_advantage = normalize_advantage
+        self.minmax_cur_rewards = minmax_cur_rewards
+        self.popart = popart
         if self.use_progress_curiousity:
             assert self.curious_agent, "Progress-based curiosity requires curious_agent=True"
             assert self.pN is not None, "Progress curiousity requires a valid predictiveNet (self.pN)."
@@ -281,7 +285,11 @@ class PredictivePPOAlgo:
                 
                 # γ-Progress reward: L(θ_old) − L(θ_new)
                 # adversarial reward: L(θ)
-                self.curious_rewards = (MSEs_ema - MSEs) if self.use_progress_curiousity else MSEs
+                cur_rewards = (MSEs_ema - MSEs) if self.use_progress_curiousity else MSEs
+                if self.normalize_curious_rewards:
+                    self.curious_rewards = 2 * ((cur_rewards - cur_rewards.min()) / (cur_rewards.max() - cur_rewards.min() + 1e-8)) - 1
+                else:
+                    self.curious_rewards = cur_rewards
 
         # Calculate intrinsic rewards
         if self.intrinsic:
@@ -333,8 +341,26 @@ class PredictivePPOAlgo:
         exps.action = self.actions
         exps.value = self.values
         exps.reward = self.rewards
-        exps.advantage = self.advantages
-        exps.returnn = exps.value + exps.advantage # approximates current and discounted future returns
+        if self.normalize_advantage:
+            exps.advantage = (self.advantages - self.advantages.mean()) / (self.advantages.std() + 1e-8)
+        else:
+            exps.advantage = self.advantages
+        if self.popart:
+            # 1) Keep UNNORMALIZED target for later stats update (after PPO optimization)
+            exps.unnorm_returnn = (exps.value + exps.advantage).detach()
+
+            # 2) Take a FROZEN snapshot of current stats to use for the WHOLE PPO update
+            curr_mean = self.acmodel.ret_mean.detach()
+            curr_std  = (self.acmodel.ret_var + 1e-5).sqrt().detach()
+
+            # 3) Normalized *targets* for the loss (frozen stats)
+            exps.returnn = (exps.unnorm_returnn - curr_mean) / curr_std
+
+            # 4) Store the *previous value prediction in normalized space* for PPO clipping
+            #    (Use the unnormalized value you stored during rollout.)
+            exps.value_raw = (exps.value.detach() - curr_mean) / curr_std
+        else:
+            exps.returnn = exps.value + exps.advantage
         exps.log_prob = self.log_probs
         exps.done_indices = self.done_indices
         exps.last_observations = self.last_observations
@@ -427,7 +453,10 @@ class PredictivePPOAlgo:
                     #     # NOTE: it is still not analogous to pRNN because obs is from current step, and act is not provided
                     #     dist, value, memory = self.acmodel(sb.obs, (memory.T * sb.mask).T[None], noise=noise, SR=sb.SR)
                     # else:
-                    dist, value = self.acmodel(sb.obs, SR=sb.SR)
+                    if self.popart:
+                        dist, raw_value = self.acmodel(sb.obs, SR=sb.SR, return_raw_value=True) 
+                    else:
+                        dist, value = self.acmodel(sb.obs, SR=sb.SR)
 
                     policy_entropy = dist.entropy().mean()
 
@@ -436,17 +465,33 @@ class PredictivePPOAlgo:
                     surr2 = torch.clamp(ratio, 1.0 - self.clip_eps, 1.0 + self.clip_eps) * sb.advantage
                     policy_loss = -torch.min(surr1, surr2).mean()
 
-                    value_clipped = sb.value + torch.clamp(value - sb.value, -self.clip_eps, self.clip_eps)
-                    surr1 = (value - sb.returnn).pow(2)
-                    surr2 = (value_clipped - sb.returnn).pow(2)
-                    value_loss = torch.max(surr1, surr2).mean()
+                    if self.popart:
+                        # old normalized value from the rollout snapshot (frozen stats)
+                        old_value_raw = sb.value_raw
+
+                        # PPO-style value clipping IN NORMALIZED SPACE
+                        value_clipped = old_value_raw + torch.clamp(raw_value - old_value_raw, -self.clip_eps, self.clip_eps)
+
+                        # Targets are ALSO in normalized space (sb.returnn)
+                        surr1 = (raw_value     - sb.returnn).pow(2)
+                        surr2 = (value_clipped - sb.returnn).pow(2)
+                        value_loss = torch.max(surr1, surr2).mean()
+                    else:
+                        # (unchanged) standard unnormalized PPO value loss
+                        value_clipped = sb.value + torch.clamp(value - sb.value, -self.clip_eps, self.clip_eps)
+                        surr1 = (value - sb.returnn).pow(2)
+                        surr2 = (value_clipped - sb.returnn).pow(2)
+                        value_loss = torch.max(surr1, surr2).mean()
 
                     loss = policy_loss - self.entropy_coef * policy_entropy + self.value_loss_coef * value_loss
 
                     # Update batch values
 
                     batch_entropy += (policy_entropy.item() / torch.log(torch.tensor(2.0))) #convert nats to bits
-                    batch_value += value.mean().item()
+                    if self.popart:
+                        batch_value += raw_value.mean().item()
+                    else:
+                        batch_value += value.mean().item()
                     batch_policy_loss += policy_loss.item()
                     batch_value_loss += value_loss.item()
                     batch_loss += loss
@@ -502,6 +547,14 @@ class PredictivePPOAlgo:
                     self._update_pN_ema()
 
         # Log some values
+        # --- PopArt stats update & output-preserving rescale (AFTER PPO optimization) ---
+        if self.popart:
+            # Prefer the stored unnormalized returns from this batch of rollouts
+            if hasattr(exps, 'unnorm_returnn'):
+                self.acmodel.update_popart_stats_and_rescale(exps.unnorm_returnn.detach())
+            else:
+                # Fallback if not present (shouldn't happen with the patch)
+                self.acmodel.update_popart_stats_and_rescale((exps.value + exps.advantage).detach())
 
         logs = {
             "entropy": np.mean(log_entropies),

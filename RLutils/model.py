@@ -96,11 +96,12 @@ class RecACModel(nn.Module, torch_ac.RecurrentACModel):
     
 
 class ACModel(nn.Module, torch_ac.ACModel):
-    def __init__(self, obs_space, action_space, with_HD=True, rgb=True):
+    def __init__(self, obs_space, action_space, with_HD=True, rgb=True, popart=False):
         super().__init__()
         self.with_HD = with_HD
         self.rgb = rgb
         self.act_dim = action_space.n
+        self.popart = popart
         self.define_model(obs_space)
 
         # Initialize parameters correctly
@@ -118,11 +119,21 @@ class ACModel(nn.Module, torch_ac.ACModel):
         )
 
         # Define critic's model
-        self.critic = nn.Sequential(
-            nn.Linear(self.embedding_size, 64),
-            nn.Tanh(),
-            nn.Linear(64, 1)
-        )
+        if self.popart:
+            self.value_mlp = nn.Sequential(
+                nn.Linear(self.embedding_size, 64),
+                nn.Tanh()
+            )
+            self.value_out = nn.Linear(64, 1)
+            self.register_buffer('ret_mean', torch.zeros(1))
+            self.register_buffer('ret_var', torch.ones(1))
+            self.register_buffer('ret_count', torch.tensor(1e-4))        
+        else:
+            self.critic = nn.Sequential(
+                nn.Linear(self.embedding_size, 64),
+                nn.Tanh(),
+                nn.Linear(64, 1)
+            )
 
     @property
     def embedding_size(self):
@@ -145,7 +156,7 @@ class ACModel(nn.Module, torch_ac.ACModel):
         m = obs_space["image"][1]
         self.image_embedding_size = ((n-1)//2-2)*((m-1)//2-2)*64
 
-    def forward(self, obs, **kwargs):
+    def forward(self, obs, return_raw_value=False, **kwargs):
         x = obs.image.transpose(1, 3).transpose(2, 3)
         if self.rgb:
             x /= 255
@@ -161,19 +172,71 @@ class ACModel(nn.Module, torch_ac.ACModel):
         x = self.actor(embedding)
         dist = Categorical(logits=F.log_softmax(x, dim=1))
 
-        x = self.critic(embedding)
-        value = x.squeeze(1)
+        if self.popart:
+            val_embed = self.value_mlp(embedding)
+            raw_value = self.value_out(val_embed).squeeze(1)
+            std = (self.ret_var + 1e-5).sqrt().detach()
+            value = raw_value * std + self.ret_mean.detach()
+            if return_raw_value:
+                return dist, raw_value #raw value is normalized. Confusing I know
+        else:
+            x = self.critic(embedding)
+            value = x.squeeze(1)
 
         return dist, value
+
+    #Below methods are for popart. Called conditionally in algo.py
+    def normalize_returns_no_update(self, returnn: torch.Tensor) -> torch.Tensor:
+        """Normalize returns with the CURRENT PopArt stats WITHOUT updating them."""
+        std = (self.ret_var + 1e-5).sqrt()
+        return (returnn - self.ret_mean) / std
+
+    @torch.no_grad()
+    def update_popart_stats_and_rescale(self, returnn: torch.Tensor) -> None:
+        """
+        Update running mean/var (Welford-style, as you do), then apply the
+        output-preserving affine transform to the final value layer.
+        """
+        # Batch stats
+        batch_mean = returnn.mean()
+        batch_var = returnn.var(unbiased=False)
+        batch_count = returnn.numel()
+
+        # Snapshots (old stats)
+        old_mean = self.ret_mean.clone()
+        old_var  = self.ret_var.clone()
+
+        # Combine (Welford / parallel)
+        delta = batch_mean - self.ret_mean
+        tot_count = self.ret_count + batch_count
+
+        new_mean = self.ret_mean + delta * batch_count / tot_count
+        m_a = self.ret_var * self.ret_count
+        m_b = batch_var * batch_count
+        M2 = m_a + m_b + delta.pow(2) * self.ret_count * batch_count / tot_count
+        new_var = M2 / tot_count
+
+        # Output-preserving rescale of the LAST value layer (Eq. 9 in PopArt)
+        old_std = (old_var + 1e-5).sqrt()
+        new_std = (new_var + 1e-5).sqrt()
+
+        # Preserve unnormalized output: v = σ * raw + μ, with σ,μ updated
+        self.value_out.weight.data.mul_(old_std / new_std)
+        self.value_out.bias.data.copy_((old_std * self.value_out.bias.data + old_mean - new_mean) / new_std)
+
+        # Commit new stats
+        self.ret_mean.copy_(new_mean)
+        self.ret_var.copy_(new_var)
+        self.ret_count.copy_(tot_count)
 
 
 class ACModelSR(ACModel):
     def __init__(self, obs_space, action_space, SR_size=-1, with_CV=True, 
-                 rgb=True, with_HD=True):
+                 rgb=True, with_HD=True, popart=False):
         self.with_CV = with_CV
         self.SR_single = SR_size # if SRs are not used, the arg should be -1
         super(ACModelSR, self).__init__(obs_space, action_space, 
-                                        with_HD=with_HD, rgb=rgb)
+                                        with_HD=with_HD, rgb=rgb, popart=popart)
 
     @property
     def SR_size(self):
@@ -203,7 +266,7 @@ class ACModelSR(ACModel):
         else:
             self.image_embedding_size = 0
 
-    def forward(self, obs, SR, **kwargs):
+    def forward(self, obs, SR, return_raw_value=False, **kwargs):
         if self.with_CV:
             x = obs.image.transpose(1, 3).transpose(2, 3)
             if self.rgb:
@@ -228,8 +291,16 @@ class ACModelSR(ACModel):
         x = self.actor(embedding)
         dist = Categorical(logits=F.log_softmax(x, dim=1))
 
-        x = self.critic(embedding)
-        value = x.squeeze(1)
+        if self.popart:
+            val_embed = self.value_mlp(embedding)
+            raw_value = self.value_out(val_embed).squeeze(1)
+            std = (self.ret_var + 1e-5).sqrt().detach()
+            value = raw_value * std + self.ret_mean.detach()
+            if return_raw_value:
+                return dist, raw_value
+        else:
+            x = self.critic(embedding)
+            value = x.squeeze(1)
 
         return dist, value
 

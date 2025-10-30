@@ -173,11 +173,11 @@ class RL_Trainer(object):
         elif args.exp.PC or args.exp.CANN or args.exp.pRNN:
             acmodel = ACModelSR(obs_space, env.action_space,
                                 args.predNet.hiddensize, args.exp.with_obs,
-                                args.exp.rgb, args.exp.with_HD)
+                                args.exp.rgb, args.exp.with_HD, args.rl.popart)
 
         else:
             acmodel = ACModel(obs_space, env.action_space, args.exp.with_HD,
-                              args.exp.rgb)
+                              args.exp.rgb, args.rl.popart)
 
         if "model_state" in status:
             acmodel.load_state_dict(status["model_state"])
@@ -232,7 +232,8 @@ class RL_Trainer(object):
                                      args.rl.ppo_epochs, args.rl.ppo_batch_size, preprocess_obss, PC, CANN,
                                      args.predNet.train, args.predNet.noisemean, args.predNet.noisestd, args.predNet.seqdur,
                                      args.exp.intrinsic, args.rl.k_int, pastSR, args.exp.curious_agent, args.rl.k_curious,
-                                     args.rl.use_progress_curiousity, args.rl.progress_ema_gamma
+                                     args.rl.use_progress_curiousity, args.rl.progress_ema_gamma, args.rl.minmax_cur_rewards,
+                                     args.rl.normalize_advantage, args.rl.popart
                                      )
 
 

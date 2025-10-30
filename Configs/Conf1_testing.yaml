@@ -62,6 +62,9 @@ rl:
     progress_ema_gamma: 0.9995 # Ema coefficient for progress-based curiosity. 0.9995 is used in https://arxiv.org/pdf/2007.07853
     eval_type: rewards
     value_type: single
+    minmax_cur_rewards: False
+    normalize_advantage: False
+    popart: False #normalize returns: https://arxiv.org/abs/1809.04474
 
 predNet:
     path: no_path/thcycRNN_5win_full-theta-s8 #example_nets_donut_long_prev_action/thRNN_5win_prevAct-PrevAct-s8
