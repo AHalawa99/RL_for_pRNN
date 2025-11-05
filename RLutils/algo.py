@@ -286,7 +286,7 @@ class PredictivePPOAlgo:
                 # γ-Progress reward: L(θ_old) − L(θ_new)
                 # adversarial reward: L(θ)
                 cur_rewards = (MSEs_ema - MSEs) if self.use_progress_curiousity else MSEs
-                if self.normalize_curious_rewards:
+                if self.minmax_cur_rewards:
                     self.curious_rewards = 2 * ((cur_rewards - cur_rewards.min()) / (cur_rewards.max() - cur_rewards.min() + 1e-8)) - 1
                 else:
                     self.curious_rewards = cur_rewards
