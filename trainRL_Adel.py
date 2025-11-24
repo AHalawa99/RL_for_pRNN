@@ -380,7 +380,7 @@ class RL_Trainer(object):
                 RLutils.save_status(status, self.model_dir)
                 print("Status saved")
 
-@hydra.main(config_path="Configs", config_name="Conf1_testing")
+@hydra.main(config_path="Configs", config_name="Conf1_Adel")
 def my_main(cfg: DictConfig):
     my_app(cfg)
 
