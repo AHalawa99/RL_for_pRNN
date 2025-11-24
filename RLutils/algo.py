@@ -358,7 +358,7 @@ class PredictivePPOAlgo:
         
         if self.i_mostly_have_a_dream:
             returns = self.values + self.advantages
-            rawp5, rawp95 = np.percentile(returns, [5, 95])
+            rawp5, rawp95 = np.percentile(returns.detach().cpu().numpy(), [5, 95])
             self.ema_5 = 0.99 * self.ema_5 + 0.01 * rawp5 if self.ema_5 != 0 else rawp5
             self.ema_95 = 0.99 * self.ema_95 + 0.01 * rawp95 if self.ema_95 != 0 else rawp95
             #"mostly" have a dream because I REMOVED THE CLAMP ON PURPOSE
