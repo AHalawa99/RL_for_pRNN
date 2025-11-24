@@ -63,6 +63,8 @@ rl:
     eval_type: rewards
     value_type: single
     minmax_cur_rewards: False
+    percentile_cur_rewards: null # Percentiles for scaling curious rewards. Either similar to [5, 95] or null
+    i_mostly_have_a_dream: True
     normalize_advantage: False
     popart: False #normalize returns: https://arxiv.org/abs/1809.04474
 

@@ -233,7 +233,8 @@ class RL_Trainer(object):
                                      args.predNet.train, args.predNet.noisemean, args.predNet.noisestd, args.predNet.seqdur,
                                      args.exp.intrinsic, args.rl.k_int, pastSR, args.exp.curious_agent, args.rl.k_curious,
                                      args.rl.use_progress_curiousity, args.rl.progress_ema_gamma, args.rl.minmax_cur_rewards,
-                                     args.rl.normalize_advantage, args.rl.popart
+                                     args.rl.normalize_advantage, args.rl.popart, args.rl.percentile_cur_rewards,
+                                     i_mostly_have_a_dream = args.rl.i_mostly_have_a_dream
                                      )
 
 
@@ -300,6 +301,10 @@ class RL_Trainer(object):
                         header += ["advantages_" + key for key in advantages]
                         header += ["policy_loss", "value_loss", "grad_norm",
                                    "MI_policy"]
+                        header += ["mean_adv_turnLeft", "mean_adv_turnRight",
+                                    "mean_adv_forward", "mean_adv_stop",
+                                    "turnLeft_prob", "turnRight_prob",
+                                    "forward_prob", "stop_prob"]
 
                 data = []
                 data += [update]
@@ -314,6 +319,10 @@ class RL_Trainer(object):
                     data += advantages.values()
                     data += [logs["policy_loss"],logs["value_loss"], logs["grad_norm"]]
                     data += [mutual_info_policy(logs["joint_dist"])]
+                    data += [logs["mean_adv_turnLeft"], logs["mean_adv_turnRight"],
+                             logs["mean_adv_forward"], logs["mean_adv_stop"],
+                             logs["turnLeft_prob"], logs["turnRight_prob"],
+                             logs["forward_prob"], logs["stop_prob"]]
 
                 wandb.log(dict(zip(header, data)))
 
@@ -371,7 +380,7 @@ class RL_Trainer(object):
                 RLutils.save_status(status, self.model_dir)
                 print("Status saved")
 
-@hydra.main(config_path="Configs", config_name="Conf1_Adel")
+@hydra.main(config_path="Configs", config_name="Conf1_testing")
 def my_main(cfg: DictConfig):
     my_app(cfg)
 

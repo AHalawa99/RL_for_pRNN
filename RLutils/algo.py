@@ -11,6 +11,7 @@ from torch_ac.format import default_preprocess_obss
 from torch_ac.utils import DictList
 from scipy.spatial.distance import cosine
 from scipy.linalg import toeplitz
+from omegaconf import ListConfig
 
 def compare_trajs(traj1, traj2):
     delta = (traj1 == traj2).cumprod()
@@ -25,7 +26,8 @@ class PredictivePPOAlgo:
                  adam_eps=1e-8, clip_eps=0.2, epochs=4, batch_size=256, preprocess_obss=None, place_cells=None,
                  cann=None, train_pN=False, noise_mu=0, noise_std=0.03, prnn_seqdur=0, intrinsic=False, k_int=1,
                  pastSR=False, curious_agent=False, k_curious=1, use_progress_curiousity=False, progress_gamma=0.9995,
-                 minmax_cur_rewards=False, normalize_advantage=False, popart=False): 
+                 minmax_cur_rewards=False, normalize_advantage=False, popart=False, percentile_cur_rewards=None,
+                 i_mostly_have_a_dream=False): 
                                                     #0.9995 is the EMA value used in https://arxiv.org/pdf/2007.07853
         """
         Initializes a `BaseAlgo` instance.
@@ -90,6 +92,15 @@ class PredictivePPOAlgo:
         self.normalize_advantage = normalize_advantage
         self.minmax_cur_rewards = minmax_cur_rewards
         self.popart = popart
+        self.percentile_cur_rewards = percentile_cur_rewards
+        assert not (self.minmax_cur_rewards and self.percentile_cur_rewards is not None)
+        if self.percentile_cur_rewards is not None or self.minmax_cur_rewards:
+            self.ema_top, self.ema_bottom = 0, 0
+        self.i_mostly_have_a_dream = i_mostly_have_a_dream
+        if self.i_mostly_have_a_dream:
+            self.ema_5, self.ema_95 = 0, 0
+            assert not (self.minmax_cur_rewards or self.percentile_cur_rewards is not None)
+            assert not (self.popart or self.normalize_advantage) 
         if self.use_progress_curiousity:
             assert self.curious_agent, "Progress-based curiosity requires curious_agent=True"
             assert self.pN is not None, "Progress curiousity requires a valid predictiveNet (self.pN)."
@@ -186,6 +197,8 @@ class PredictivePPOAlgo:
             obs, reward, terminated, truncated, _ = self.env.step(det_action)
             loc = self.agent_pos()
             done = terminated or truncated
+            if self.prnn_seqdur > 0 and (i+1)%self.prnn_seqdur==0:
+                done = True
 
             # Update spatial representation
             if self.pastSR:
@@ -227,9 +240,6 @@ class PredictivePPOAlgo:
             self.log_episode_return += reward
             self.log_episode_reshaped_return += self.rewards[i]
             self.log_episode_num_frames += 1
-
-            if self.prnn_seqdur > 0 and (i+1)%self.prnn_seqdur==0:
-                done = True
 
             if done:
                 if self.intrinsic and reward > 1e-5:
@@ -287,7 +297,21 @@ class PredictivePPOAlgo:
                 # adversarial reward: L(θ)
                 cur_rewards = (MSEs_ema - MSEs) if self.use_progress_curiousity else MSEs
                 if self.minmax_cur_rewards:
-                    self.curious_rewards = 2 * ((cur_rewards - cur_rewards.min()) / (cur_rewards.max() - cur_rewards.min() + 1e-8)) - 1
+                    thismax, thismin = cur_rewards.max(), cur_rewards.min()
+                    self.ema_top = 0.99 * self.ema_top + 0.01 * thismax if self.ema_top != 0 else thismax
+                    self.ema_bottom = 0.99 * self.ema_bottom + 0.01 * thismin if self.ema_bottom != 0 else thismin
+                    den = max(1e-8, (self.ema_top - self.ema_bottom))
+                    self.curious_rewards = 2 * ((cur_rewards - self.ema_bottom) / den) - 1
+                elif self.percentile_cur_rewards is not None:
+                    assert isinstance(self.percentile_cur_rewards, ListConfig) and len(self.percentile_cur_rewards) == 2, \
+                        "percentile_cur_rewards must be a list of length 2"
+                    lowperc, highperc = self.percentile_cur_rewards
+                    low, high = np.percentile(cur_rewards.detach().cpu().numpy(), [lowperc, highperc])
+                    self.ema_top = 0.99 * self.ema_top + 0.01 * high if self.ema_top != 0 else high
+                    self.ema_bottom = 0.99 * self.ema_bottom + 0.01 * low if self.ema_bottom != 0 else low
+                    # scale such that 5th percentile → -1, 95th percentile → +1
+                    den = max(1e-8, (self.ema_top - self.ema_bottom))
+                    self.curious_rewards = 2 * ((cur_rewards - self.ema_bottom) / den) - 1
                 else:
                     self.curious_rewards = cur_rewards
 
@@ -331,6 +355,16 @@ class PredictivePPOAlgo:
             reward_term = self.rewards[i] + self.k_int * self.int_rewards[i] + self.k_curious * self.curious_rewards[i]
             delta = reward_term + self.discount * next_value * next_mask - self.values[i]
             self.advantages[i] = delta + self.discount * self.gae_lambda * next_advantage * next_mask
+        
+        if self.i_mostly_have_a_dream:
+            returns = self.values + self.advantages
+            rawp5, rawp95 = np.percentile(returns, [5, 95])
+            self.ema_5 = 0.99 * self.ema_5 + 0.01 * rawp5 if self.ema_5 != 0 else rawp5
+            self.ema_95 = 0.99 * self.ema_95 + 0.01 * rawp95 if self.ema_95 != 0 else rawp95
+            #"mostly" have a dream because I REMOVED THE CLAMP ON PURPOSE
+            norm_adv = (returns - self.values) / (max(self.ema_95 - self.ema_5, 1e-8))
+            self.advantages = norm_adv.detach() # gradients should not go through the advantages
+
 
         exps = DictList()
         exps.obs = self.obss
@@ -384,6 +418,15 @@ class PredictivePPOAlgo:
         if self.pN:
             self.pN.reset_state(device=self.device)
 
+        #get advantage per action
+        sum_advantages = torch.bincount(self.actions, weights=self.advantages, 
+                                        minlength=getattr(self.acmodel, "act_dim"))
+        count_actions = torch.bincount(self.actions, minlength=getattr(self.acmodel, "act_dim"))
+        mean_adv_per_action = sum_advantages / count_actions.clamp(min=1)
+        relative_adv_per_action = mean_adv_per_action / mean_adv_per_action.sum().clamp(min=1e-8)
+        relative_count_actions = count_actions / count_actions.sum().clamp(min=1)
+
+
         # Log some values
 
         logs = {
@@ -398,7 +441,15 @@ class PredictivePPOAlgo:
             "advantages": self.advantages.tolist(),
             "loc_entropy": loc_entropy,
             "loc_entropy_5": loc_entropy_5,
-            "joint_dist": joint_probabilities
+            "joint_dist": joint_probabilities,
+            "mean_adv_turnLeft": relative_adv_per_action[0].item(),
+            "mean_adv_turnRight": relative_adv_per_action[1].item(),
+            "mean_adv_forward": relative_adv_per_action[2].item(),
+            "mean_adv_stop": relative_adv_per_action[3].item(),
+            "turnLeft_prob": relative_count_actions[0].item(),
+            "turnRight_prob": relative_count_actions[1].item(),
+            "forward_prob": relative_count_actions[2].item(),
+            "stop_prob": relative_count_actions[3].item()
         }
 
         self.log_return = []
