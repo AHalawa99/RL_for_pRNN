@@ -256,6 +256,7 @@ class PredictivePPOAlgo:
                 self.init_SR()
                 self.last_observations.append(self.obs)
                 self.obs = self.env.reset()
+                self.loc = self.agent_pos()
                 self.log_episode_return = 0
                 self.log_episode_reshaped_return = 0
                 self.log_episode_num_frames = 0
@@ -423,7 +424,7 @@ class PredictivePPOAlgo:
                                         minlength=getattr(self.acmodel, "act_dim"))
         count_actions = torch.bincount(self.actions, minlength=getattr(self.acmodel, "act_dim"))
         mean_adv_per_action = sum_advantages / count_actions.clamp(min=1)
-        relative_adv_per_action = mean_adv_per_action / mean_adv_per_action.sum().clamp(min=1e-8)
+        relative_adv_per_action = mean_adv_per_action / mean_adv_per_action.abs().sum().clamp(min=1e-8)
         relative_count_actions = count_actions / count_actions.sum().clamp(min=1)
 
 
