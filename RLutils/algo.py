@@ -348,12 +348,14 @@ class PredictivePPOAlgo:
             # else:
                 _, next_value = self.acmodel(preprocessed_obs, SR=self.SR)
 
+        all_reward_terms = []
         for i in reversed(range(self.num_frames)):
             next_mask = self.masks[i+1] if i < self.num_frames - 1 else self.mask
             next_value = self.values[i+1] if i < self.num_frames - 1 else next_value
             next_advantage = self.advantages[i+1] if i < self.num_frames - 1 else 0
 
             reward_term = self.rewards[i] + self.k_int * self.int_rewards[i] + self.k_curious * self.curious_rewards[i]
+            all_reward_terms.append(reward_term.item())
             delta = reward_term + self.discount * next_value * next_mask - self.values[i]
             self.advantages[i] = delta + self.discount * self.gae_lambda * next_advantage * next_mask
         
@@ -450,7 +452,8 @@ class PredictivePPOAlgo:
             "turnLeft_prob": relative_count_actions[0].item(),
             "turnRight_prob": relative_count_actions[1].item(),
             "forward_prob": relative_count_actions[2].item(),
-            "stop_prob": relative_count_actions[3].item()
+            "stop_prob": relative_count_actions[3].item(),
+            "reward_terms": all_reward_terms
         }
 
         self.log_return = []

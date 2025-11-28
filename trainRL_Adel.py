@@ -285,6 +285,7 @@ class RL_Trainer(object):
                     return_per_episode = RLutils.synthesize(logs["return_per_episode"], signs=True)
                     int_rewards = RLutils.synthesize(logs["intrinsic_rewards"], abs=True)
                     cur_rewards = RLutils.synthesize(logs["curious_rewards"], abs=True)
+                    combo_reward_terms = RLutils.synthesize(logs["reward_terms"], abs=True)
                     values = RLutils.synthesize(logs["values"])
                     advantages = RLutils.synthesize(logs["advantages"])
 
@@ -297,6 +298,7 @@ class RL_Trainer(object):
                         header += ["return_" + key for key in return_per_episode.keys()]
                         header += ["int_reward_" + key for key in int_rewards.keys()]
                         header += ["cur_reward_" + key for key in cur_rewards.keys()]
+                        header += ["all_rewards_" + key for key in combo_reward_terms.keys()]
                         header += ["values_" + key for key in values]
                         header += ["advantages_" + key for key in advantages]
                         header += ["policy_loss", "value_loss", "grad_norm",
@@ -315,6 +317,7 @@ class RL_Trainer(object):
                     data += return_per_episode.values()
                     data += int_rewards.values()
                     data += cur_rewards.values()
+                    data += combo_reward_terms.values()
                     data += values.values()
                     data += advantages.values()
                     data += [logs["policy_loss"],logs["value_loss"], logs["grad_norm"]]
