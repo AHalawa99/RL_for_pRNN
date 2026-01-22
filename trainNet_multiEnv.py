@@ -51,16 +51,25 @@ class multiEnvGeometryAnalysis:
                                                               self.WAKEactivity[1]['obs_unique'])
 
 
-        #Fit the isomap (visualization)
-        self.withIsomap = withIsomap
+        # #Fit the isomap (visualization)
+        # self.withIsomap = withIsomap
+        # if withIsomap:
+        #     self.isomap = fitIsomap([self.WAKEactivity[0]['h'],self.WAKEactivity[1]['h']],
+        #                             points_per_map=4000, n_neighbors=20)
+        # self.withIsomap3d = withIsomap3d
+        # if withIsomap3d:
+        #     self.isomap3d = fitIsomap([self.WAKEactivity[0]['h'],self.WAKEactivity[1]['h']],
+        #                             points_per_map=4000, n_neighbors=20, n_components=3)
+
+        # NEED TO ACCOUNT FOR >2 ENVIRONMENTS !!!!!
+        acts = [a["h"] for a in self.WAKEactivity]
         if withIsomap:
-            self.isomap = fitIsomap([self.WAKEactivity[0]['h'],self.WAKEactivity[1]['h']],
-                                    points_per_map=4000, n_neighbors=20)
-        self.withIsomap3d = withIsomap3d
+            self.isomap = fitIsomap(acts, points_per_map=4000, n_neighbors=20)
+
         if withIsomap3d:
-            self.isomap3d = fitIsomap([self.WAKEactivity[0]['h'],self.WAKEactivity[1]['h']],
-                                    points_per_map=4000, n_neighbors=20, n_components=3)
-        
+            self.isomap3d = fitIsomap(acts, points_per_map=4000, n_neighbors=20, n_components=3)
+
+
         #Calculate spatial RSA (sRSA) in each envirionment
         self.sRSA = []
         self.sRSA_dists = []
@@ -99,10 +108,11 @@ class multiEnvGeometryAnalysis:
         trainingPanel_dist(self.pN)
         
         plt.subplot(3,4,3)
-        isomapPanel(self.isomap,[self.WAKEactivity[0]['h'],self.WAKEactivity[1]['h']])
+        acts = [a["h"] for a in self.WAKEactivity]
+        isomapPanel(self.isomap,acts)
 
         plt.subplot(3,4,4, projection='3d')
-        isomapPanel(self.isomap3d,[self.WAKEactivity[0]['h'],self.WAKEactivity[1]['h']])
+        isomapPanel(self.isomap3d,acts)
 
         for eidx, env_sRSA in enumerate(self.sRSA_dists):
             plt.subplot(3,4,7+eidx)
