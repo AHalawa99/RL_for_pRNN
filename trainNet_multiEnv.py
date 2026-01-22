@@ -485,7 +485,7 @@ wandb_runner = wandb.init(
                         entity = 'adel-halawa-mila', #'ahalawa-mcgill-university',
                         project = 'MultiEnv',
                         name=args.namext,
-                        id = args.namext[:-1],
+                        id = args.namext,
                         dir = args.netsfolder,
                         resume='allow',
                         )
