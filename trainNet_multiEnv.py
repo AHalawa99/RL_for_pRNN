@@ -121,6 +121,28 @@ class multiEnvGeometryAnalysis:
             plt.show()
         return fg
     
+    def IsomapOnlyFigure(self, show=False, maxplotpoints=10000, rotate=(0,0)):
+        fg = plt.figure(figsize=(10,4))
+
+        # 2D
+        ax1 = fg.add_subplot(1, 2, 1)
+        isomapPanel(self.isomap,
+                [self.WAKEactivity[0]['h'], self.WAKEactivity[1]['h']],
+                maxplotpoints=maxplotpoints,
+                rotate=rotate)
+        ax1.set_title("Isomap 2D")
+
+        # 3D
+        ax2 = fg.add_subplot(1, 2, 2, projection='3d')
+        isomapPanel(self.isomap3d,
+                [self.WAKEactivity[0]['h'], self.WAKEactivity[1]['h']],
+                maxplotpoints=maxplotpoints,
+                rotate=rotate)
+        ax2.set_title("Isomap 3D")
+
+        if show:
+            plt.show()
+        return fg
 
     def sleepReplayPanel(self, exsleep):
         plt.plot(self.SWdists[0,exsleep,:],self.SWdists[1,exsleep,:],
@@ -581,7 +603,7 @@ def calculateTrainingMetrics(predictiveNet):
                                     timesteps_wake=8000,
                                     numsleeps=numsleeps, timesteps_sleep=200,
                                     withIsomap=True, withIsomap3d=True)
-    fig = MEGA.SpatialGeometryFigure(exsleep=0, show=False)
+    fig = MEGA.IsomapOnlyFigure(show=False)
     wandb.log({"spatial_geometry": wandb.Image(fig)})
     plt.close(fig) 
     
