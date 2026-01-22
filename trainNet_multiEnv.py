@@ -37,7 +37,7 @@ class multiEnvGeometryAnalysis:
         self.envs = envs
 
         #The Random action agent, used for exploring the environment
-        action_probability = np.array([0.15,0.15,0.6,0.1,0,0,0])
+        action_probability = np.array([0.15,0.15,0.6,0.1])
         agent = RandomActionAgent(envs[0].action_space,action_probability)
         
         #Run a trial in each environment
