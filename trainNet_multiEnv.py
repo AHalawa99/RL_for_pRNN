@@ -46,9 +46,10 @@ class multiEnvGeometryAnalysis:
             self.WAKEactivity.append(runWAKE(pN, env, agent, timesteps_wake, theta=theta))
             
         #Calculate the manifold distance between the two environments (TODO modify for >2)
-        self.manifoldDistance = calculateManifoldDistance(self.WAKEactivity[0]['h'],self.WAKEactivity[1]['h'])
-        self.manifoldDistance_obs = calculateManifoldDistance(self.WAKEactivity[0]['obs_unique'],
-                                                              self.WAKEactivity[1]['obs_unique'])
+
+        # self.manifoldDistance = calculateManifoldDistance(self.WAKEactivity[0]['h'],self.WAKEactivity[1]['h'])
+        # self.manifoldDistance_obs = calculateManifoldDistance(self.WAKEactivity[0]['obs_unique'],
+        #                                                       self.WAKEactivity[1]['obs_unique'])
 
 
         # #Fit the isomap (visualization)
@@ -136,8 +137,9 @@ class multiEnvGeometryAnalysis:
 
         # 2D
         ax1 = fg.add_subplot(1, 2, 1)
+        acts = [a["h"] for a in self.WAKEactivity]
         isomapPanel(self.isomap,
-                [self.WAKEactivity[0]['h'], self.WAKEactivity[1]['h']],
+                acts,
                 maxplotpoints=maxplotpoints,
                 rotate=rotate)
         ax1.set_title("Isomap 2D")
@@ -145,7 +147,7 @@ class multiEnvGeometryAnalysis:
         # 3D
         ax2 = fg.add_subplot(1, 2, 2, projection='3d')
         isomapPanel(self.isomap3d,
-                [self.WAKEactivity[0]['h'], self.WAKEactivity[1]['h']],
+                acts,
                 maxplotpoints=maxplotpoints,
                 rotate=rotate)
         ax2.set_title("Isomap 3D")
