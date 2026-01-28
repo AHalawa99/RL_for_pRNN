@@ -9,7 +9,7 @@ Created on Tue Jun 14 22:07:04 2022
 
 #%%
 from prnn.utils.predictiveNet import PredictiveNet
-from prnn.utils.agent import create_agent
+from prnn.utils.agent import create_agent, RandomActionAgent
 from prnn.utils.data import create_dataloader
 from prnn.utils.env import make_env
 from prnn.utils.figures import TrainingFigure
@@ -214,10 +214,19 @@ if args.contin: #continue previous training, so load net from folder
     else:
         env = make_env(args.env, args.envPackage, args.actenc)
         predictiveNet.addEnvironment(env)
-    agent = create_agent(args.env, env, args.agent)
+    
+    if args.agent=='RandomActionAgent':
+        action_probability = np.array([0.15,0.15,0.6,0.1])
+        agent = RandomActionAgent(env.action_space, action_probability)
+    else:
+        agent = create_agent(args.env, env, args.agent)
 else: #create new PredictiveNet and begin training
     env = make_env(args.env, args.envPackage, args.actenc)
-    agent = create_agent(args.env, env, args.agent)
+    if args.agent=='RandomActionAgent':
+        action_probability = np.array([0.15,0.15,0.6,0.1])
+        agent = RandomActionAgent(env.action_space, action_probability)
+    else:
+        agent = create_agent(args.env, env, args.agent)
     predictiveNet = PredictiveNet(env,
                                   hidden_size = args.hidden_size,
                                   pRNNtype = args.pRNNtype,
