@@ -106,7 +106,7 @@ parser.add_argument("--noisestd", default=0.03, type=float,
 parser.add_argument("-f", "--sparsity", default=0.5, type=float,
                     help="Activation sparsity (via layer norm, irrelevant for non-LN networks) (Default: 0.5)")
 
-parser.add_argument('--trainBias', action='store_true', default=False)
+parser.add_argument('--trainBias', action='store_true', default=True)
 
 parser.add_argument("--bias_lr", default=1, type=float,    #former default:2e-4 (not relative)
                      help="Bias Learning Rate? (Relative to learning rate) (Default: 1)")

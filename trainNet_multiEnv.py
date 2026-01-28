@@ -436,13 +436,13 @@ parser.add_argument("--env_package", default='farama-minigrid',
                     help="Environment Package")
 parser.add_argument("--trainCurriculum", default='mixed-batch',
                     help="Multi-Env training curriculium")
-parser.add_argument("--epochsPerEnv", default=60, type=int,
+parser.add_argument("--epochsPerEnv", default=20, type=int,
                     help="How many epochs is each environment trained on")
 parser.add_argument("--seq_length", default=500, type=int,
                      help="how long is each behavioral sequence? (Default: 1000")
 parser.add_argument("--trials_per_epoch", default=500, type=int,
                      help="many trials in an epoch? (Default: 500")
-parser.add_argument("--batch_size", default=16, type=int,
+parser.add_argument("--batch_size", default=32, type=int,
                      help="many trials in an minibatch? (Default: 16")
 
 ## Dataset Parameters
@@ -487,6 +487,14 @@ parser.add_argument("--noisestd", default=0.03, type=float,
                      help="Std of internal noise (Default: 0)")
 parser.add_argument("--wandb_log", action='store_true', default=True,
                      help="Log training to Weights and Biases?")
+
+# EG params
+
+parser.add_argument("--eg_weight_decay", default=1e-8, type=float,
+                    help="Weight Decay for Exponentiated Gradient Descent (Default: 1e-6)")
+
+parser.add_argument("--eg_lr", default=None, type=float,
+                    help="Learning Rate for Exponentiated Gradient Descent (Default: None (do not use EG))")
 
 args = parser.parse_args()
 
