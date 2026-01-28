@@ -171,14 +171,14 @@ parser.add_argument("--eg_weight_decay", default=1e-6, type=float,
 parser.add_argument("--eg_lr", default=None, type=float,
                     help="Learning Rate for Exponentiated Gradient Descent (Default: None (do not use EG))")
 
-parser.add_argument("--bias_lr", default=0.1, type=float,
+parser.add_argument("--bias_lr", default=1, type=float,
                     help="Learning Rate for Biases when using Exponentiated Gradient Descent (Default: 0.1)")
 
 # Adel's Arg
 parser.add_argument("--wandb_log", action='store_true', default=True,
                      help="Log training to Weights and Biases?")
 
-parser.add_argument("wandb_projectname", type=str, default='',
+parser.add_argument("--wandb_projectname", type=str, default='',
                     help="WandB Project Name")
 
 args = parser.parse_args()
