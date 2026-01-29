@@ -191,6 +191,7 @@ wandb_runner = wandb.init(
                         id = args.namext,
                         dir = args.savefolder,
                         resume='allow',
+                        settings=wandb.Settings(init_timeout=600)
                         )
 
 
