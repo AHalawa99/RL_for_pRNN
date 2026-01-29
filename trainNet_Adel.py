@@ -102,7 +102,7 @@ parser.add_argument("--noisestd", default=0.03, type=float,
 
 parser.add_argument('--trainBias', action='store_true', default=True)
 
-parser.add_argument("--namext", default='',
+parser.add_argument("--namext", default='DEFAULT',
                     help="Extension to the savename?")
 
 parser.add_argument("--actenc",
@@ -114,7 +114,7 @@ parser.add_argument("--actenc",
 parser.add_argument('--saveTrainData', action='store_true', default=True)
 parser.add_argument('--no-saveTrainData', dest='saveTrainData', action='store_false')
 
-parser.add_argument('--withDataLoader', action='store_true', default=True)
+parser.add_argument('--withDataLoader', action='store_true', default=False)
 parser.add_argument('--noDataLoader', dest='withDataLoader', action='store_false')
 
 parser.add_argument("--datadir",
@@ -178,7 +178,7 @@ parser.add_argument("--bias_lr", default=1, type=float,
 parser.add_argument("--wandb_log", action='store_true', default=True,
                      help="Log training to Weights and Biases?")
 
-parser.add_argument("--wandb_projectname", type=str, default='',
+parser.add_argument("--wandb_projectname", type=str, default='TESTING',
                     help="WandB Project Name")
 
 args = parser.parse_args()
@@ -296,7 +296,7 @@ if predictiveNet.numTrainingTrials == -1:
                                               saveTrainingData=False,bitsec= False,
                                               calculatesRSA = True, sleepstd=0.03)
     
-    predictiveNet.plotTuningCurvePanel(savename=savename,savefolder=figfolder)
+    # predictiveNet.plotTuningCurvePanel(savename=savename,savefolder=figfolder)
     # print('Calculating INITIAL Decoding Performance...')
     # predictiveNet.calculateDecodingPerformance(env,agent,decoder,
     #                                             savename=savename, savefolder=figfolder,
@@ -322,9 +322,9 @@ while predictiveNet.numTrainingEpochs<numepochs: #run through all epochs
     # predictiveNet.calculateDecodingPerformance(env,agent,decoder,
     #                                             savename=savename, savefolder=figfolder,
     #                                             saveTrainingData=True)
-    predictiveNet.plotLearningCurve(savename=savename,savefolder=figfolder,
-                                    incDecode=False)
-    predictiveNet.plotTuningCurvePanel(savename=savename,savefolder=figfolder)
+    # predictiveNet.plotLearningCurve(savename=savename,savefolder=figfolder,
+    #                                 incDecode=False)
+    #predictiveNet.plotTuningCurvePanel(savename=savename,savefolder=figfolder)
     plt.show()
     plt.close('all')
     predictiveNet.saveNet(args.savefolder+savename)
@@ -333,10 +333,10 @@ while predictiveNet.numTrainingEpochs<numepochs: #run through all epochs
 
 progress.close()
 
-predictiveNet.trainingCompleted = True
-TrainingFigure(predictiveNet,savename=savename,savefolder=figfolder)
+# predictiveNet.trainingCompleted = True
+# TrainingFigure(predictiveNet,savename=savename,savefolder=figfolder)
 
-#If the user doesn't want to save all that training data, delete it except the last one
-if args.saveTrainData is False:
-    predictiveNet.TrainingSaver = predictiveNet.TrainingSaver.drop(predictiveNet.TrainingSaver.index[:-1])
-    predictiveNet.saveNet(args.savefolder+savename)
+# #If the user doesn't want to save all that training data, delete it except the last one
+# if args.saveTrainData is False:
+#     predictiveNet.TrainingSaver = predictiveNet.TrainingSaver.drop(predictiveNet.TrainingSaver.index[:-1])
+#     predictiveNet.saveNet(args.savefolder+savename)
