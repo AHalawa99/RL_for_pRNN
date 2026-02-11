@@ -30,14 +30,14 @@ class multiEnvGeometryAnalysis:
                  timesteps_wake=10000, 
                  timesteps_sleep=250, numsleeps = 25, sleepMeanStd = (0,0.1),
                  replayThresh = 0.1, theta='expand',
-                 withIsomap=False, withIsomap3d=False):
+                 withIsomap=False, withIsomap3d=False, longActProbs=True):
         
         #try 2 remove necessity to save
         self.pN = pN
         self.envs = envs
 
         #The Random action agent, used for exploring the environment
-        action_probability = np.array([0.15,0.15,0.6,0.1])
+        action_probability = np.array([0.15,0.15,0.6,0.1,0,0,0]) if longActProbs else np.array([0.15,0.15,0.6,0.1])
         agent = RandomActionAgent(envs[0].action_space,action_probability)
         
         #Run a trial in each environment
@@ -432,9 +432,9 @@ parser.add_argument("--act_enc", default='SpeedHD',
 
 ## Environment parameters
 parser.add_argument("--envlist", type=list_of_strings,
-                    default=['MiniGrid-LRoom-18x18-v0','MiniGrid-TRoom-20x20-v0','MiniGrid-DonutRoom-16x16-v0'],
+                    default=['MiniGrid-LRoom-18x18-v0','MiniGrid-TRoom-20x20-v0','MiniGrid-Donut-16x16-v0'],
                     help="List of environments to train on")
-parser.add_argument("--env_package", default='farama-minigrid',
+parser.add_argument("--env_package", default='gym-minigrid',
                     help="Environment Package")
 parser.add_argument("--trainCurriculum", default='mixed-batch',
                     help="Multi-Env training curriculium")
@@ -460,7 +460,7 @@ parser.add_argument("--savefolder", default='',
                     help="Subfolder to save the net? (foldername/)")
 parser.add_argument("--loadfolder", default='',
                     help="Where to load the net? (foldername/)")
-parser.add_argument("--namext", default='',
+parser.add_argument("--namext", default='UNNAMED',
                      help="Extension to the savename?")
 parser.add_argument("-c", "--contin", action="store_true",
                      help="Continue previous training?")
@@ -503,7 +503,7 @@ args = parser.parse_args()
 wandb_runner = wandb.init(
                         # set the wandb project where this run will be logged
                         entity = 'adel-halawa-mila', #'ahalawa-mcgill-university',
-                        project = 'MultiEnv',
+                        project = 'MultiEnv_csShift',
                         name=args.namext,
                         id = args.namext,
                         dir = args.netsfolder,
@@ -523,7 +523,11 @@ np.random.seed(args.seed)
 envs = []
 for envname in args.envlist:
     env = make_env(env_key=envname, package=args.env_package, act_enc=args.act_enc)
-    agent = RandomActionAgent(env.action_space, np.array([0.15,0.15,0.6,0.1]))
+    if 'farama' in args.env_package:
+        actspace_probs = np.array([0.15,0.15,0.6,0.1])
+    else:
+        actspace_probs = np.array([0.15,0.15,0.6,0.1])
+    agent = RandomActionAgent(env.action_space, actspace_probs)
     create_dataloader(env=env, agent=agent, n_trajs=args.datasetSize,
                       folder=args.datasetfolder, batch_size=args.batch_size, 
                       seq_length=args.seq_length, num_workers=0)
@@ -598,7 +602,7 @@ elif args.trainCurriculum == 'hold-last':
     [envNames.append(envs[-1].name) for i in range(args.epochsPerEnv*len(envs))]
 
 
-def calculateTrainingMetrics(predictiveNet):
+def calculateTrainingMetrics(predictiveNet, doIso=False):
 
     for enum,env in enumerate(envs):
         place_fields, SI, _ = predictiveNet.calculateSpatialRepresentation(env,agent,
@@ -618,14 +622,15 @@ def calculateTrainingMetrics(predictiveNet):
             #- Mean SI (all, tuned cells)
             #- Sleep occupancy (? might need new way to calculate this, using all envs)
 
-    numsleeps = 0
-    MEGA = multiEnvGeometryAnalysis(predictiveNet,envs,
-                                    timesteps_wake=8000,
-                                    numsleeps=numsleeps, timesteps_sleep=200,
-                                    withIsomap=True, withIsomap3d=True)
-    fig = MEGA.IsomapOnlyFigure(show=False)
-    wandb.log({"spatial_geometry": wandb.Image(fig)})
-    plt.close(fig) 
+    if doIso:
+        numsleeps = 0
+        MEGA = multiEnvGeometryAnalysis(predictiveNet,envs,
+                                        timesteps_wake=8000,
+                                        numsleeps=numsleeps, timesteps_sleep=200,
+                                        withIsomap=True, withIsomap3d=True)
+        fig = MEGA.IsomapOnlyFigure(show=False)
+        wandb.log({"spatial_geometry": wandb.Image(fig)})
+        plt.close(fig) 
     
     # predictiveNet.addTrainingData('sRSA_env0', MEGA.sRSA[0])
     # predictiveNet.addTrainingData('sRSA_env1', MEGA.sRSA[1])
@@ -653,7 +658,7 @@ if predictiveNet.numTrainingTrials == -1:
     calculateTrainingMetrics(predictiveNet)
 
     print('Saving Network')
-    predictiveNet.saveNet(args.savefolder+savename,savefolder = args.netsfolder)
+    predictiveNet.saveNet(args.savefolder+savename,savefolder = args.netsfolder, cpu=True)
     
     
 #loop epochs
@@ -666,10 +671,14 @@ while predictiveNet.numTrainingEpochs<numepochs:
     #predictiveNet.addTrainingData('envName', envNames[epoch])
     
     print('Calculating Performance Metrics')
-    calculateTrainingMetrics(predictiveNet)
+
+    if predictiveNet.numTrainingEpochs%10==0:
+        calculateTrainingMetrics(predictiveNet, doIso=True)
+    else:
+        calculateTrainingMetrics(predictiveNet, doIso=False)
     
     print('Saving Network')
-    predictiveNet.saveNet(args.savefolder+savename,savefolder = args.netsfolder)
+    predictiveNet.saveNet(args.savefolder+savename,savefolder = args.netsfolder, cpu=True)
     #predictiveNet.saveNet(savefolder+savename)
     
 predictiveNet.trainingCompleted = True    
