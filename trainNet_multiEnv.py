@@ -526,7 +526,7 @@ for envname in args.envlist:
     if 'farama' in args.env_package:
         actspace_probs = np.array([0.15,0.15,0.6,0.1])
     else:
-        actspace_probs = np.array([0.15,0.15,0.6,0.1])
+        actspace_probs = np.array([0.15,0.15,0.6,0.1,0,0,0])
     agent = RandomActionAgent(env.action_space, actspace_probs)
     create_dataloader(env=env, agent=agent, n_trajs=args.datasetSize,
                       folder=args.datasetfolder, batch_size=args.batch_size, 
