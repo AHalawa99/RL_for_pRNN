@@ -442,7 +442,7 @@ parser.add_argument("--epochsPerEnv", default=20, type=int,
                     help="How many epochs is each environment trained on")
 parser.add_argument("--seq_length", default=500, type=int,
                      help="how long is each behavioral sequence? (Default: 1000")
-parser.add_argument("--trials_per_epoch", default=500, type=int,
+parser.add_argument("--trials_per_epoch", default=1000, type=int,
                      help="many trials in an epoch? (Default: 500")
 parser.add_argument("--batch_size", default=32, type=int,
                      help="many trials in an minibatch? (Default: 16")
