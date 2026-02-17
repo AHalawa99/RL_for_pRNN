@@ -26,6 +26,9 @@ import matplotlib.pyplot as plt
 import torch
 import random
 
+from scipy.ndimage import gaussian_filter1d
+from scipy.stats import sem # Standard Error of Mean
+
 from types import SimpleNamespace
 # Parse arguments
 
@@ -194,6 +197,38 @@ wandb_runner = wandb.init(
                         settings=wandb.Settings(init_timeout=600)
                         )
 
+def get_comprehensive_metrics(hist2, rbins, sbins):
+    """
+    Calculates D_sat_95 (Old Capacity) and D_grad (New Elbow).
+    """
+    s_mid = (sbins[:-1] + sbins[1:]) / 2
+    r_mid = (rbins[:-1] + rbins[1:]) / 2
+    col_sums = hist2.sum(axis=0)
+    valid_mask = col_sums > 0
+
+    mean_curve = np.zeros_like(r_mid)
+    mean_curve[valid_mask] = (hist2[:, valid_mask] * s_mid[:, None]).sum(axis=0) / col_sums[valid_mask]
+
+    # Smooth for gradient stability
+    smooth_curve = gaussian_filter1d(mean_curve[valid_mask], sigma=1.0)
+    valid_r = r_mid[valid_mask]
+
+    # METRIC: D_sat_95 (Old)
+    v_max = np.max(smooth_curve)
+    idx_sat_95 = np.where(smooth_curve >= 0.95 * v_max)[0]
+    d_sat_95 = valid_r[idx_sat_95[0]] if len(idx_sat_95) > 0 else valid_r[-1]
+
+    # METRIC: D_grad (New Elbow)
+    grads = np.gradient(smooth_curve)
+    initial_slope = np.mean(grads[:3]) if len(grads) > 3 else grads[0]
+    # Handle edge case where slope might be negative or zero initially
+    if initial_slope <= 0: initial_slope = 1e-5
+
+    idx_flat = np.where(grads < 0.05 * initial_slope)[0]
+    d_grad = valid_r[idx_flat[0]] if len(idx_flat) > 0 else valid_r[-1]
+
+    return d_sat_95, d_grad
+
 
 savename = args.pRNNtype + '-' + args.namext + '-s' + str(args.seed)
 figfolder = 'nets/'+args.savefolder+'/trainfigs/'+savename
@@ -292,10 +327,13 @@ if predictiveNet.numTrainingTrials == -1:
     predictiveNet.useDataLoader = args.withDataLoader
     print('Calculating INITIAL Spatial Representation...')
 
-    place_fields, SI, decoder = predictiveNet.calculateSpatialRepresentation(env,agent,
-                                              trainDecoder=False, trainHDDecoder = False,
-                                              saveTrainingData=False,bitsec= False,
-                                              calculatesRSA = True, sleepstd=0.03)
+    place_fields, SI, decoder, sRSA, hist2, sbins, rbins = predictiveNet.calculateSpatialRepresentation(env,agent,
+                                                                                                        trainDecoder=False, 
+                                                                                                        trainHDDecoder = False,
+                                                                                                        saveTrainingData=False,
+                                                                                                        bitsec= False,
+                                                                                                        calculatesRSA = True, 
+                                                                                                        sleepstd=0.03)
     
     # predictiveNet.plotTuningCurvePanel(savename=savename,savefolder=figfolder)
     # print('Calculating INITIAL Decoding Performance...')
@@ -315,10 +353,18 @@ while predictiveNet.numTrainingEpochs<numepochs: #run through all epochs
                             sequence_duration=sequence_duration,
                             num_trials=num_trials)
     print('Calculating Spatial Representation...')
-    place_fields, SI, decoder = predictiveNet.calculateSpatialRepresentation(env,agent,
-                                                 trainDecoder=False, trainHDDecoder = False,
-                                                 saveTrainingData=False, bitsec= False,
-                                                 calculatesRSA = True, sleepstd=0.03)
+    place_fields, SI, decoder, sRSA, hist2, sbins, rbins = predictiveNet.calculateSpatialRepresentation(env,
+                                                                                                        agent,
+                                                                                                        trainDecoder=False, 
+                                                                                                        trainHDDecoder = False,
+                                                                                                        saveTrainingData=False, 
+                                                                                                        bitsec= False,
+                                                                                                        calculatesRSA = True, 
+                                                                                                        sleepstd=0.03)
+    
+    d_sat_95, d_grad = get_comprehensive_metrics(hist2, rbins, sbins)
+    wandb.log({'sRSA 95 saturation': d_sat_95,
+               'sRSA gradient saturation': d_grad})
     # print('Calculating Decoding Performance...')
     # predictiveNet.calculateDecodingPerformance(env,agent,decoder,
     #                                             savename=savename, savefolder=figfolder,
@@ -328,7 +374,7 @@ while predictiveNet.numTrainingEpochs<numepochs: #run through all epochs
     #predictiveNet.plotTuningCurvePanel(savename=savename,savefolder=figfolder)
     plt.show()
     plt.close('all')
-    predictiveNet.saveNet(args.savefolder+savename)
+    predictiveNet.saveNet(args.savefolder+savename, cpu=True)
 
     progress.update(1)
 
