@@ -225,9 +225,18 @@ def get_comprehensive_metrics(hist2, rbins, sbins):
     if initial_slope <= 0: initial_slope = 1e-5
 
     idx_flat = np.where(grads < 0.05 * initial_slope)[0]
-    d_grad = valid_r[idx_flat[0]] if len(idx_flat) > 0 else valid_r[-1]
+    d_grad_5 = valid_r[idx_flat[0]] if len(idx_flat) > 0 else valid_r[-1]
 
-    return d_sat_95, d_grad
+    idx_flat = np.where(grads < 0.1 * initial_slope)[0]
+    d_grad_10 = valid_r[idx_flat[0]] if len(idx_flat) > 0 else valid_r[-1]
+
+    idx_flat = np.where(grads < 0.15 * initial_slope)[0]
+    d_grad_15 = valid_r[idx_flat[0]] if len(idx_flat) > 0 else valid_r[-1]
+
+    idx_flat = np.where(grads < 0.2 * initial_slope)[0]
+    d_grad_20 = valid_r[idx_flat[0]] if len(idx_flat) > 0 else valid_r[-1]
+
+    return d_sat_95, d_grad_5, d_grad_10, d_grad_15, d_grad_20
 
 
 savename = args.pRNNtype + '-' + args.namext + '-s' + str(args.seed)
@@ -362,9 +371,12 @@ while predictiveNet.numTrainingEpochs<numepochs: #run through all epochs
                                                                                                         calculatesRSA = True, 
                                                                                                         sleepstd=0.03)
     
-    d_sat_95, d_grad = get_comprehensive_metrics(hist2, rbins, sbins)
+    d_sat_95, d_grad_5, d_grad_10, d_grad_15, d_grad_20 = get_comprehensive_metrics(hist2, rbins, sbins)
     wandb.log({'sRSA 95 saturation': d_sat_95,
-               'sRSA gradient saturation': d_grad})
+               'sRSA gradient saturation': d_grad_5,
+               'sRSA gradient saturation 10': d_grad_10,
+               'sRSA gradient saturation 15': d_grad_15,
+               'sRSA gradient saturation 20': d_grad_20})
     # print('Calculating Decoding Performance...')
     # predictiveNet.calculateDecodingPerformance(env,agent,decoder,
     #                                             savename=savename, savefolder=figfolder,

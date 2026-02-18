@@ -605,7 +605,7 @@ elif args.trainCurriculum == 'hold-last':
 def calculateTrainingMetrics(predictiveNet, doIso=False):
 
     for enum,env in enumerate(envs):
-        place_fields, SI, _ = predictiveNet.calculateSpatialRepresentation(env,agent,
+        place_fields, SI, _, _, _, _, _ = predictiveNet.calculateSpatialRepresentation(env,agent,
                                                       trainDecoder=False,saveTrainingData=False,
                                                       bitsec= False,
                                                       calculatesRSA = True, sleepstd=0.03,
@@ -672,11 +672,11 @@ while predictiveNet.numTrainingEpochs<numepochs:
     
     print('Calculating Performance Metrics')
 
-    if predictiveNet.numTrainingEpochs%10==0:
-        calculateTrainingMetrics(predictiveNet, doIso=True)
-    else:
-        calculateTrainingMetrics(predictiveNet, doIso=False)
-    
+    # if predictiveNet.numTrainingEpochs%10==0:
+    #     calculateTrainingMetrics(predictiveNet, doIso=True)
+    # else:
+    #     calculateTrainingMetrics(predictiveNet, doIso=False)
+    calculateTrainingMetrics(predictiveNet, doIso=False)
     print('Saving Network')
     predictiveNet.saveNet(args.savefolder+savename,savefolder = args.netsfolder, cpu=True)
     #predictiveNet.saveNet(savefolder+savename)
