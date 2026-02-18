@@ -503,7 +503,7 @@ args = parser.parse_args()
 wandb_runner = wandb.init(
                         # set the wandb project where this run will be logged
                         entity = 'adel-halawa-mila', #'ahalawa-mcgill-university',
-                        project = 'MultiEnv_csShift',
+                        project = 'MultiEnv_long',
                         name=args.namext,
                         id = args.namext,
                         dir = args.netsfolder,
