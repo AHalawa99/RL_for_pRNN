@@ -17,6 +17,7 @@ from prnn.utils.figures import SpontTrajectoryFigure
 from prnn.analysis.OfflineTrajectoryAnalysis import OfflineTrajectoryAnalysis
 import argparse
 from tqdm import tqdm
+from prnn.analysis.representationalGeometryAnalysis import representationalGeometryAnalysis as RGA
 
 #TODO: get rid of these dependencies
 import os
@@ -356,27 +357,40 @@ if hasattr(predictiveNet, 'numTrainingEpochs') is False:
 
 progress = tqdm(total=numepochs, desc="Training Epochs") #tdqm status bar
 
+logging_trials = list(range(100, 1100, 100)) +  list(range(1200, 2200, 200)) + list(range(3000, 11000, 1000))
+assert num_trials == 100
+
 while predictiveNet.numTrainingEpochs<numepochs: #run through all epochs
     print(f'Training Epoch {predictiveNet.numTrainingEpochs}')
     predictiveNet.trainingEpoch(env, agent,
                             sequence_duration=sequence_duration,
                             num_trials=num_trials)
     print('Calculating Spatial Representation...')
-    place_fields, SI, decoder, sRSA, hist2, sbins, rbins = predictiveNet.calculateSpatialRepresentation(env,
-                                                                                                        agent,
-                                                                                                        trainDecoder=False, 
-                                                                                                        trainHDDecoder = False,
-                                                                                                        saveTrainingData=False, 
-                                                                                                        bitsec= False,
-                                                                                                        calculatesRSA = True, 
-                                                                                                        sleepstd=0.03)
+
+    if predictiveNet.numTrainingEpochs*num_trials in logging_trials:
+        rga = RGA(predictiveNet=predictiveNet, spacemetric='cityblock', theta='mean',
+                agent=agent)
+
+        hill_fit = rga.hill_fit['t_half']
+        wandb.log({'sRSA Hill Fit t_half': hill_fit})
     
-    d_sat_95, d_grad_5, d_grad_10, d_grad_15, d_grad_20 = get_comprehensive_metrics(hist2, rbins, sbins)
-    wandb.log({'sRSA 95 saturation': d_sat_95,
-               'sRSA gradient saturation': d_grad_5,
-               'sRSA gradient saturation 10': d_grad_10,
-               'sRSA gradient saturation 15': d_grad_15,
-               'sRSA gradient saturation 20': d_grad_20})
+    # place_fields, SI, decoder, sRSA, hist2, sbins, rbins = predictiveNet.calculateSpatialRepresentation(env,
+    #                                                                                                     agent,
+    #                                                                                                     trainDecoder=False, 
+    #                                                                                                     trainHDDecoder = False,
+    #                                                                                                     saveTrainingData=False, 
+    #                                                                                                     bitsec= False,
+    #                                                                                                     calculatesRSA = True, 
+    #                                                                                                     sleepstd=0.1)
+    
+
+    
+    # d_sat_95, d_grad_5, d_grad_10, d_grad_15, d_grad_20 = get_comprehensive_metrics(hist2, rbins, sbins)
+    # wandb.log({'sRSA 95 saturation': d_sat_95,
+    #            'sRSA gradient saturation': d_grad_5,
+    #            'sRSA gradient saturation 10': d_grad_10,
+    #            'sRSA gradient saturation 15': d_grad_15,
+    #            'sRSA gradient saturation 20': d_grad_20})
     # print('Calculating Decoding Performance...')
     # predictiveNet.calculateDecodingPerformance(env,agent,decoder,
     #                                             savename=savename, savefolder=figfolder,
