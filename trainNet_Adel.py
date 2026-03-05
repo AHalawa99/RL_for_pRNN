@@ -372,25 +372,30 @@ while predictiveNet.numTrainingEpochs<numepochs: #run through all epochs
                 agent=agent)
 
         hill_fit = rga.hill_fit['t_half']
-        wandb.log({'sRSA Hill Fit t_half': hill_fit})
-    
-    # place_fields, SI, decoder, sRSA, hist2, sbins, rbins = predictiveNet.calculateSpatialRepresentation(env,
-    #                                                                                                     agent,
-    #                                                                                                     trainDecoder=False, 
-    #                                                                                                     trainHDDecoder = False,
-    #                                                                                                     saveTrainingData=False, 
-    #                                                                                                     bitsec= False,
-    #                                                                                                     calculatesRSA = True, 
-    #                                                                                                     sleepstd=0.1)
-    
 
+        RSA, hist2, sbins, rbins = rga.RSA_cs
+
+        # calculateRSA_space(self, WAKEactivity, metric=defaultMetric,
+        #                   usecells = None, spacemetric='euclidean',
+        #                   cont=False, max_dist=False)
+        
     
-    # d_sat_95, d_grad_5, d_grad_10, d_grad_15, d_grad_20 = get_comprehensive_metrics(hist2, rbins, sbins)
-    # wandb.log({'sRSA 95 saturation': d_sat_95,
-    #            'sRSA gradient saturation': d_grad_5,
-    #            'sRSA gradient saturation 10': d_grad_10,
-    #            'sRSA gradient saturation 15': d_grad_15,
-    #            'sRSA gradient saturation 20': d_grad_20})
+        # place_fields, SI, decoder, sRSA, hist2, sbins, rbins = predictiveNet.calculateSpatialRepresentation(env,
+        #                                                                                                     agent,
+        #                                                                                                     trainDecoder=False, 
+        #                                                                                                     trainHDDecoder = False,
+        #                                                                                                     saveTrainingData=False, 
+        #                                                                                                     bitsec= False,
+        #                                                                                                     calculatesRSA = True, 
+        #                                                                                                     sleepstd=0.1)
+        
+        d_sat_95, d_grad_5, d_grad_10, d_grad_15, d_grad_20 = get_comprehensive_metrics(hist2, rbins, sbins)
+        wandb.log({'sRSA 95 saturation': d_sat_95,
+                'sRSA gradient saturation': d_grad_5,
+                'sRSA gradient saturation 10': d_grad_10,
+                'sRSA gradient saturation 15': d_grad_15,
+                'sRSA gradient saturation 20': d_grad_20,
+                'sRSA Hill Fit t_half': hill_fit})
     # print('Calculating Decoding Performance...')
     # predictiveNet.calculateDecodingPerformance(env,agent,decoder,
     #                                             savename=savename, savefolder=figfolder,
