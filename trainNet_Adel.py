@@ -357,7 +357,7 @@ if hasattr(predictiveNet, 'numTrainingEpochs') is False:
 
 progress = tqdm(total=numepochs, desc="Training Epochs") #tdqm status bar
 
-logging_trials = list(range(100, 1100, 100)) +  list(range(1200, 2200, 200)) + list(range(3000, 11000, 1000))
+logging_trials = list(range(100, 1100, 100)) +  list(range(1200, 2200, 200)) + list(range(3000, 110000, 1000))
 assert num_trials == 100
 
 while predictiveNet.numTrainingEpochs<numepochs: #run through all epochs
@@ -369,7 +369,7 @@ while predictiveNet.numTrainingEpochs<numepochs: #run through all epochs
 
     if predictiveNet.numTrainingEpochs*num_trials in logging_trials:
         rga = RGA(predictiveNet=predictiveNet, spacemetric='cityblock', theta='mean',
-                agent=agent)
+                  agent=agent)
 
         hill_fit = rga.hill_fit['t_half']
 
