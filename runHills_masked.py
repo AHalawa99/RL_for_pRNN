@@ -25,8 +25,7 @@ for actenc in ['SpeedHD', 'Velocities']:#, 'OneHot']:
             netname = 'fig3enets/fig3e_newMasked-M_k' + str(k) + '_' + actenc + f'_S{seed}-s{seed}'
             pnet = PredictiveNet.loadNet(netname)
 
-            rga = RGA(predictiveNet=pnet, spacemetric='cityblock', theta='mean',
-                        agent=agent)
+            rga = RGA(predictiveNet=pnet, spacemetric='cityblock', theta='mean', agent=agent)
             hill_fit = rga.hill_fit['t_half']
 
             masked_data[actenc_dict[actenc], k, seed-1] = hill_fit
