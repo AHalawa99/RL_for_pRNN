@@ -21,6 +21,7 @@ from prnn.analysis.representationalGeometryAnalysis import representationalGeome
 
 #TODO: get rid of these dependencies
 import os
+import datetime
 import wandb
 import numpy as np
 import matplotlib.pyplot as plt
@@ -64,14 +65,14 @@ parser.add_argument("--loadfolder", default='',
                     help="Where to load the net? (foldername/)")
 
 parser.add_argument("--numepochs",
-                    default=80,
+                    default=400,
                     type=int,
                     help="how many training epochs? (Default: 50)")
 
 parser.add_argument("--seqdur", default=500, type=int,
                     help="how long is each behavioral sequence? (Default: 500")
 
-parser.add_argument("--numtrials", default=1024, type=int,
+parser.add_argument("--numtrials", default=100, type=int,
                     help="How many trials in an epoch? Best if divisible by batch size (Default: 1024")
 
 parser.add_argument("--hidden_size", default=500, type=int,
@@ -83,7 +84,7 @@ parser.add_argument("-c", "--contin", default= False, action="store_true",
 parser.add_argument("--load_env", default=-1, type=int,
                     help="Load Environment for continued Training. Specify unique env id")
 
-parser.add_argument("-s", "--seed", default=8, type=int,
+parser.add_argument("-s", "--seed", default=999, type=int,
                     help="Random Seed? (Default: 8)")
 
 parser.add_argument("--lr", default=3e-3, type=float,    #former default:2e-4 (not relative)
@@ -152,7 +153,7 @@ parser.add_argument("--mask_actions", default=False, type=bool,
 parser.add_argument("--actOffset", default=0, type=int,
                     help="Number of timesteps to offset actions by (backwards)")
 
-parser.add_argument("--k", default=5, type=int,
+parser.add_argument("--k", default=1, type=int,
                     help="Number of predictions; i.e. number of future timesteps to mask or number of rollouts")
 
 parser.add_argument("--use_ALN", default=False, type=bool,
@@ -175,7 +176,7 @@ parser.add_argument("--eg_weight_decay", default=1e-6, type=float,
 parser.add_argument("--eg_lr", default=None, type=float,
                     help="Learning Rate for Exponentiated Gradient Descent (Default: None (do not use EG))")
 
-parser.add_argument("--bias_lr", default=1, type=float,
+parser.add_argument("--bias_lr", default=0.01, type=float,
                     help="Learning Rate for Biases when using Exponentiated Gradient Descent (Default: 0.1)")
 
 # Adel's Arg
@@ -187,12 +188,13 @@ parser.add_argument("--wandb_projectname", type=str, default='TESTING',
 
 args = parser.parse_args()
 
+date = datetime.datetime.now().strftime("%y-%m-%d-%H-%M-%S")
 wandb_runner = wandb.init(
                         # set the wandb project where this run will be logged
                         entity = 'adel-halawa-mila', #'ahalawa-mcgill-university',
                         project = args.wandb_projectname,
                         name=args.namext,
-                        id = args.namext,
+                        id = f"{args.namext}_{date}",
                         dir = args.savefolder,
                         resume='allow',
                         settings=wandb.Settings(init_timeout=600)
@@ -300,6 +302,7 @@ else: #create new PredictiveNet and begin training
     #predictiveNet.seed = args.seed
     #predictiveNet.trainArgs = args
     predictiveNet.plotSampleTrajectory(env,agent,
+                                       timesteps=args.seqdur,
                                        savename=savename+'exTrajectory_untrained',
                                        savefolder=figfolder)
     #predictiveNet.savefolder = args.savefolder
@@ -337,13 +340,13 @@ if predictiveNet.numTrainingTrials == -1:
     predictiveNet.useDataLoader = args.withDataLoader
     print('Calculating INITIAL Spatial Representation...')
 
-    place_fields, SI, decoder, sRSA, hist2, sbins, rbins = predictiveNet.calculateSpatialRepresentation(env,agent,
-                                                                                                        trainDecoder=False, 
-                                                                                                        trainHDDecoder = False,
-                                                                                                        saveTrainingData=False,
-                                                                                                        bitsec= False,
-                                                                                                        calculatesRSA = True, 
-                                                                                                        sleepstd=0.03)
+    # place_fields, SI, decoder, sRSA, hist2, sbins, rbins = predictiveNet.calculateSpatialRepresentation(env,agent,
+    #                                                                                                     trainDecoder=False, 
+    #                                                                                                     trainHDDecoder = False,
+    #                                                                                                     saveTrainingData=False,
+    #                                                                                                     bitsec= False,
+    #                                                                                                     calculatesRSA = True, 
+    #                                                                                                     sleepstd=0.03)
     
     # predictiveNet.plotTuningCurvePanel(savename=savename,savefolder=figfolder)
     # print('Calculating INITIAL Decoding Performance...')
@@ -355,7 +358,7 @@ if predictiveNet.numTrainingTrials == -1:
 if hasattr(predictiveNet, 'numTrainingEpochs') is False:
     predictiveNet.numTrainingEpochs = int(predictiveNet.numTrainingTrials/num_trials)
 
-progress = tqdm(total=numepochs, desc="Training Epochs") #tdqm status bar
+# progress = tqdm(total=numepochs, desc="Training Epochs") #tdqm status bar
 
 logging_trials = list(range(100, 1100, 100)) +  list(range(1200, 2200, 200)) + list(range(3000, 110000, 1000))
 assert num_trials == 100
@@ -374,12 +377,8 @@ while predictiveNet.numTrainingEpochs<numepochs: #run through all epochs
         hill_fit = rga.hill_fit['t_half']
 
         RSA, hist2, sbins, rbins = rga.RSA_cs
-
-        # calculateRSA_space(self, WAKEactivity, metric=defaultMetric,
-        #                   usecells = None, spacemetric='euclidean',
-        #                   cont=False, max_dist=False)
+        SleepSimilarity, SWdist, dist_closest = rga.SWdist_cs
         
-    
         # place_fields, SI, decoder, sRSA, hist2, sbins, rbins = predictiveNet.calculateSpatialRepresentation(env,
         #                                                                                                     agent,
         #                                                                                                     trainDecoder=False, 
@@ -395,7 +394,9 @@ while predictiveNet.numTrainingEpochs<numepochs: #run through all epochs
                 'sRSA gradient saturation 10': d_grad_10,
                 'sRSA gradient saturation 15': d_grad_15,
                 'sRSA gradient saturation 20': d_grad_20,
-                'sRSA Hill Fit t_half': hill_fit})
+                'sRSA Hill Fit t_half': hill_fit,
+                'sRSA': RSA,
+                'SWdist': SWdist})
     # print('Calculating Decoding Performance...')
     # predictiveNet.calculateDecodingPerformance(env,agent,decoder,
     #                                             savename=savename, savefolder=figfolder,
@@ -403,13 +404,13 @@ while predictiveNet.numTrainingEpochs<numepochs: #run through all epochs
     # predictiveNet.plotLearningCurve(savename=savename,savefolder=figfolder,
     #                                 incDecode=False)
     #predictiveNet.plotTuningCurvePanel(savename=savename,savefolder=figfolder)
-    plt.show()
-    plt.close('all')
+    # plt.show()
+    # plt.close('all')
     predictiveNet.saveNet(args.savefolder+savename, cpu=True)
 
-    progress.update(1)
+    # progress.update(1)
 
-progress.close()
+# progress.close()
 
 # predictiveNet.trainingCompleted = True
 # TrainingFigure(predictiveNet,savename=savename,savefolder=figfolder)
