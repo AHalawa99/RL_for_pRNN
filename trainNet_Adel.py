@@ -371,8 +371,7 @@ while predictiveNet.numTrainingEpochs<numepochs: #run through all epochs
     print('Calculating Spatial Representation...')
 
     if predictiveNet.numTrainingEpochs*num_trials in logging_trials:
-        rga = RGA(predictiveNet=predictiveNet, spacemetric='cityblock', theta='mean',
-                  agent=agent)
+        rga = RGA(predictiveNet=predictiveNet, theta='mean', agent=agent)
 
         hill_fit = rga.hill_fit['t_half']
 
@@ -395,8 +394,8 @@ while predictiveNet.numTrainingEpochs<numepochs: #run through all epochs
                 'sRSA gradient saturation 15': d_grad_15,
                 'sRSA gradient saturation 20': d_grad_20,
                 'sRSA Hill Fit t_half': hill_fit,
-                'sRSA': RSA,
-                'SWdist': SWdist})
+                'sRSA': RSA[0],
+                'SWdist': SleepSimilarity})
     # print('Calculating Decoding Performance...')
     # predictiveNet.calculateDecodingPerformance(env,agent,decoder,
     #                                             savename=savename, savefolder=figfolder,
