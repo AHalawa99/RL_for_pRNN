@@ -371,7 +371,7 @@ while predictiveNet.numTrainingEpochs<numepochs: #run through all epochs
     print('Calculating Spatial Representation...')
 
     if predictiveNet.numTrainingEpochs*num_trials in logging_trials:
-        rga = RGA(predictiveNet=predictiveNet, theta='mean', agent=agent)
+        rga = RGA(predictiveNet=predictiveNet, theta='expand', agent=agent)
 
         hill_fit = rga.hill_fit['t_half']
 
