@@ -5,6 +5,8 @@ from prnn.utils.predictiveNet import PredictiveNet
 from prnn.utils.general import saveFig
 import argparse
 import wandb
+from sklearn.decomposition import PCA
+from scipy.stats import linregress
 
 #TODO: get rid of these dependencies
 import numpy as np
@@ -602,25 +604,37 @@ elif args.trainCurriculum == 'hold-last':
     [envNames.append(envs[-1].name) for i in range(args.epochsPerEnv*len(envs))]
 
 
-def calculateTrainingMetrics(predictiveNet, doIso=False):
+def calculateTrainingMetrics(predictiveNet, doIso=False, dim_analysis=False):
+
+    if dim_analysis:
+        hs = []
 
     for enum,env in enumerate(envs):
         place_fields, SI, _, _, _, _, _ = predictiveNet.calculateSpatialRepresentation(env,agent,
-                                                      trainDecoder=False,saveTrainingData=False,
-                                                      bitsec= False,
-                                                      calculatesRSA = True, sleepstd=0.03,
-                                                      wandb_nameext='_env'+str(enum))
+                                                    trainDecoder=False,saveTrainingData=False,
+                                                    bitsec= False,
+                                                    calculatesRSA = True, sleepstd=0.03,
+                                                    wandb_nameext='_env'+str(enum))
         
-        sequence_duration = 2000
+        sequence_duration = 2000 if not dim_analysis else 15000
         obs,act,_,_ = predictiveNet.collectObservationSequence(env, 
-                                                      agent, 
-                                                      sequence_duration)
+                                                    agent, 
+                                                    sequence_duration)
         obs_pred, obs_next, h = predictiveNet.predict(obs, act)
         predloss = predictiveNet.loss_fn(obs_pred, obs_next, h)
-        wandb.log({'predloss_env'+str(enum): predloss.detach().numpy()})        
-        #Metric for each environment...
-            #- Mean SI (all, tuned cells)
-            #- Sleep occupancy (? might need new way to calculate this, using all envs)
+        wandb.log({'predloss_env'+str(enum): predloss.detach().numpy()})    
+        
+        if dim_analysis:
+            hs.append(h.mean(axis=0, keepdims=True).squeeze().detach().numpy())
+    
+    if dim_analysis:
+        data = np.vstack(hs)
+        evs = PCA().fit(data).explained_variance_
+        n_fit = min(50, len(evs))
+        slope, _, _, _, _ = linregress(np.log(np.arange(1, n_fit + 1)), np.log(evs[:n_fit]))
+        alpha = -1 * slope
+
+        wandb.log({"Dimensionality Alpha": alpha})  
 
     if doIso:
         numsleeps = 0
@@ -630,12 +644,7 @@ def calculateTrainingMetrics(predictiveNet, doIso=False):
                                         withIsomap=True, withIsomap3d=True)
         fig = MEGA.IsomapOnlyFigure(show=False)
         wandb.log({"spatial_geometry": wandb.Image(fig)})
-        plt.close(fig) 
-    
-    # predictiveNet.addTrainingData('sRSA_env0', MEGA.sRSA[0])
-    # predictiveNet.addTrainingData('sRSA_env1', MEGA.sRSA[1])
-    # predictiveNet.addTrainingData('D_01', MEGA.manifoldDistance[0])
-    # predictiveNet.addTrainingData('D_10', MEGA.manifoldDistance[1])
+        plt.close(fig)    
     return
 
 
@@ -676,7 +685,9 @@ while predictiveNet.numTrainingEpochs<numepochs:
     #     calculateTrainingMetrics(predictiveNet, doIso=True)
     # else:
     #     calculateTrainingMetrics(predictiveNet, doIso=False)
-    calculateTrainingMetrics(predictiveNet, doIso=False)
+    if (predictiveNet.numTrainingEpochs+1)%args.epochsPerEnv == 0:
+        calculateTrainingMetrics(predictiveNet, doIso=False)
+
     print('Saving Network')
     predictiveNet.saveNet(args.savefolder+savename,savefolder = args.netsfolder, cpu=True)
     #predictiveNet.saveNet(savefolder+savename)
