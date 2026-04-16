@@ -53,7 +53,7 @@ parser.add_argument("--envPackage",
                     # default='ratinabox_remix',
                     help="which package the environment comes from? (Default: farama-minigrid; other options: gym-minigrid, ratinabox, ratinabox_remix)")
 
-parser.add_argument("--pRNNtype", default='Masked',
+parser.add_argument("--pRNNtype", default='Rollout',
                     help="Which pRNN type?")
 
 parser.add_argument("--savefolder",
@@ -153,7 +153,7 @@ parser.add_argument("--mask_actions", default=False, type=bool,
 parser.add_argument("--actOffset", default=0, type=int,
                     help="Number of timesteps to offset actions by (backwards)")
 
-parser.add_argument("--k", default=1, type=int,
+parser.add_argument("--k", default=5, type=int,
                     help="Number of predictions; i.e. number of future timesteps to mask or number of rollouts")
 
 parser.add_argument("--use_ALN", default=False, type=bool,
@@ -371,7 +371,8 @@ while predictiveNet.numTrainingEpochs<numepochs: #run through all epochs
     print('Calculating Spatial Representation...')
 
     if predictiveNet.numTrainingEpochs*num_trials in logging_trials:
-        rga = RGA(predictiveNet=predictiveNet, theta='expand', agent=agent)
+        rga = RGA(predictiveNet=predictiveNet, theta='expand', agent=agent, 
+                  actRSA = False, obsRSA=False, HDRSA = False)
 
         hill_fit = rga.hill_fit['t_half']
 
