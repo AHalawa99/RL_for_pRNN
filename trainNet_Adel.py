@@ -377,7 +377,7 @@ while predictiveNet.numTrainingEpochs<numepochs: #run through all epochs
 
         RSA, hist2, sbins, rbins = rga.RSA_cs
         SleepSimilarity, SWdist, dist_closest = rga.SWdist_cs
-        
+        srsa = RSA[0]
         # place_fields, SI, decoder, sRSA, hist2, sbins, rbins = predictiveNet.calculateSpatialRepresentation(env,
         #                                                                                                     agent,
         #                                                                                                     trainDecoder=False, 
@@ -389,13 +389,13 @@ while predictiveNet.numTrainingEpochs<numepochs: #run through all epochs
         
         d_sat_95, d_grad_5, d_grad_10, d_grad_15, d_grad_20 = get_comprehensive_metrics(hist2, rbins, sbins)
         wandb.log({'sRSA 95 saturation': d_sat_95,
-                'sRSA gradient saturation': d_grad_5,
-                'sRSA gradient saturation 10': d_grad_10,
-                'sRSA gradient saturation 15': d_grad_15,
-                'sRSA gradient saturation 20': d_grad_20,
-                'sRSA Hill Fit t_half': hill_fit,
-                'sRSA': RSA[0],
-                'SWdist': SleepSimilarity})
+                   'sRSA gradient saturation': d_grad_5,
+                    'sRSA gradient saturation 10': d_grad_10,
+                    'sRSA gradient saturation 15': d_grad_15,
+                    'sRSA gradient saturation 20': d_grad_20,
+                    'sRSA Hill Fit t_half': hill_fit,
+                    'sRSA': srsa,
+                    'SWdist': SleepSimilarity})
     # print('Calculating Decoding Performance...')
     # predictiveNet.calculateDecodingPerformance(env,agent,decoder,
     #                                             savename=savename, savefolder=figfolder,
