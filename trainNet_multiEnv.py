@@ -26,6 +26,8 @@ from scipy.spatial.distance import pdist, squareform
 from sklearn import manifold
 from scipy.stats import spearmanr
 from prnn.utils.plotUtils import setNiceAxes
+import datetime
+
 
 class multiEnvGeometryAnalysis:
     def __init__(self, pN, envs,
@@ -502,12 +504,13 @@ parser.add_argument("--eg_lr", default=None, type=float,
 
 args = parser.parse_args()
 
+date = datetime.datetime.now().strftime("%y-%m-%d-%H-%M-%S")
 wandb_runner = wandb.init(
                         # set the wandb project where this run will be logged
                         entity = 'adel-halawa-mila', #'ahalawa-mcgill-university',
                         project = 'MultiEnv_long',
                         name=args.namext,
-                        id = args.namext,
+                        id = f"{args.namext}_{date}",
                         dir = args.netsfolder,
                         resume='allow',
                         )
